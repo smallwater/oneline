@@ -1,0 +1,308 @@
+package com.howbuy.cc.member.utils;
+
+import com.howbuy.cc.common.utils.DateUtils;
+
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+/**
+ * 内部收益率计算
+ * @author 周权
+ */
+public class Xirr {
+
+	public final static double 	MIN_DISTANCE 		= 1E-15;	// 目标精确度，允许的最小差值（建议精确到8-15位小数）
+	public final static double 	MIN_VALUE 			= 1E-7;		// 允许的净现值偏差最小范围
+	public final static int 	MAX_ITERATION 		= 100;		// 最高迭代次数（防止卡死，通常100次循环足够）
+	public final static double 	DEFAULT_XIRR_GUESS	= 0.1D;		// 默认Xirr猜测值
+	public final static double 	FULL_YEAR_DAYS 		= 365.0D;	// 全年天数
+	
+	/**
+	 * 计算净现值为0的收益率<br>
+	 * 说明:使用迭代折半查近视值法计算函数 XIRR。通过改变收益率(从 guess 开始)，不断修正计算结果，直至其精度小于 1E-7。<br>
+	 * 如果函数 XIRR 运算 100 次，仍未找到结果，则返回错误值 NaN。
+	 * @param values 现金流量(必须至少一个正现金流和一个负现金流)
+	 * @param dates 日期
+	 * @param guess 猜测值
+	 * @return 收益率
+	 */
+	public double xirr(double [] values, Date [] dates, double guess)
+	{
+		double 	result 					= Double.NaN;			// 返回结果
+		double 	irrGuess 				= DEFAULT_XIRR_GUESS;	// 计算xirr猜测值折半量
+		double 	sumCashFlows 			= 0.0D;					// 现金流量和
+		boolean wasHi 					= false;				// 防止遗漏区间标识
+		double 	npv 					= 0.0D;					// 净现值
+		int 	negativeCashFlowCount	= 0;					// 正现金流个数
+		int		positiveCashFlowCount	= 0;					// 负现金流个数
+		
+		if (values == null || values.length == 0) return result;
+		if (dates == null || dates.length == 0) return result;
+		if (values.length != dates.length) return result;
+			
+		
+		for (int i = 0; i < values.length; i++) 
+		{
+			sumCashFlows += values[i];
+			if (values[i] > 0.0)
+			{
+				negativeCashFlowCount++;
+			} else if (values[i] < 0.0)
+			{
+				positiveCashFlowCount++;
+			}
+		}
+		
+		if(negativeCashFlowCount <= 0 || positiveCashFlowCount <= 0) return result;
+			
+		if (!Double.isNaN(guess)) 
+		{
+			irrGuess = guess;
+			if (irrGuess <= 0.0) irrGuess = 0.5;
+		}
+		
+		double irr = sumCashFlows < 0 ? -irrGuess : irrGuess;
+		
+		for (int i = 0; i <= MAX_ITERATION; i++) 
+		{
+			
+			npv = getXirrNpvValue(irr, values, dates);
+			
+			if (Math.abs(npv) < MIN_VALUE)
+			{
+				result = irr;
+				break;
+			}
+			
+			if (npv > 0.0) 
+			{
+				if (wasHi) irrGuess /= 2;
+				irr += irrGuess;
+				if (wasHi) 
+				{
+					irrGuess -= MIN_DISTANCE;
+					wasHi = false;
+				}
+			} else 
+			{
+				irrGuess /= 2;
+				irr -= irrGuess;
+				wasHi = true;
+			}
+
+			if (irrGuess <= MIN_DISTANCE) 
+			{
+				result = irr;
+				break;
+			}
+		}
+		
+		return result;
+	}
+	
+	/**
+	 * 根据公式计算净现值
+	 * @param guess 猜测值
+	 * @param values 现金流量(必须至少一个正现金流和一个负现金流)
+	 * @param dates 日期
+	 * @return 净现值
+	 */
+	public double getXirrNpvValue(final double guess, double [] values, Date [] dates)
+	{
+		double result = 0.0D;
+		// 0 = sum(values[i] / (1 + rate)^((dates[i] - dates[1]) / 365))
+		for (int i = 0; i < dates.length; i++) 
+		{
+			result += values[i] / Math.pow(1 + guess, getIntervalDays(dates[i], dates[0]) / FULL_YEAR_DAYS);
+		}
+		return result;
+	}
+
+    private double getIntervalDays(Date endDate, Date startDate) {
+        return DateUtils.getDays(DateUtils.formatDate(startDate, DateUtils.YYYYMMDD), DateUtils.formatDate(endDate, DateUtils.YYYYMMDD));
+    }
+
+
+    public static void main2(String[] args) throws ParseException {
+		
+		String [] date = new String[]{
+				"2013/2/22",
+				"2013/3/22",
+				"2013/4/22",
+				"2013/5/22",
+				"2013/6/22",
+				"2013/7/22",
+				"2013/8/22",
+				"2013/9/22",
+				"2013/10/22",
+				"2013/11/22",
+				"2013/12/22",
+				"2014/1/22",
+				"2014/2/22",
+				"2014/3/22",
+				"2014/4/22",
+				"2014/5/22",
+				"2014/6/22",
+				"2014/7/22",
+				"2014/8/22",
+				"2014/9/22",
+				"2014/10/22",
+				"2014/11/22",
+				"2014/12/22",
+				"2015/1/22",
+				"2015/2/22",
+				"2015/3/22",
+				"2015/4/22",
+				"2015/5/22",
+				"2015/6/22",
+				"2015/7/22",
+				"2015/8/22",
+				"2015/9/22",
+				"2015/10/22",
+				"2015/11/22",
+				"2015/12/22",
+				"2016/1/22",
+				"2016/2/22",
+				"2016/3/22",
+				"2016/4/22",
+				"2016/5/22",
+				"2016/6/22",
+				"2016/7/22",
+				"2016/8/22",
+				"2016/9/22",
+				"2016/10/22",
+				"2016/11/22",
+				"2016/12/22",
+				"2017/1/22",
+				"2017/2/22",
+				"2017/3/22",
+				"2017/4/22",
+				"2017/5/22",
+				"2017/6/22",
+				"2017/7/22",
+				"2017/8/22",
+				"2017/9/22",
+				"2017/10/22",
+				"2017/11/22",
+				"2017/12/22",
+				"2018/1/22",
+				"2018/2/22",
+				};
+
+				double values [] = new double[]{
+				-4300000.00,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				102582.66 ,
+				-397317.59,
+				};
+		
+		Xirr xirr = new Xirr();		
+		Date [] dates = new Date[values.length];
+		
+		SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+		for (int i = 0; i < date.length; i++) {
+			dates[i] = sdf.parse(date[i]);
+		}
+		System.out.println(xirr.xirr(values, dates, 0.1));
+				
+				
+//		for (int i = 0; i < date.length; i++) {
+//			SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+//			Date d = sdf.parse(date[i]);
+//			System.out.println(DateUtil.getIntervalDays(d, sdf.parse(date[0])) / 365.0);
+//		}
+	}
+
+
+
+    public static void main(String[] args) throws ParseException {
+
+        String [] date = new String[]{
+                "2017/11/21",
+                "2017/12/21",
+                "2018/1/4",
+                "2018/1/16",
+                "2018/1/16",
+                "2018/1/18",
+                "2018/1/22",
+        };
+
+        double values [] = new double[]{
+                -300.00,
+                -400.00 ,
+                -225.00 ,
+                -400.00 ,
+                88.00 ,
+                -400.00 ,
+                1680.00 ,
+        };
+
+        Xirr xirr = new Xirr();
+        Date [] dates = new Date[values.length];
+
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy/MM/dd");
+        for (int i = 0; i < date.length; i++) {
+            dates[i] = sdf.parse(date[i]);
+        }
+        System.out.println(xirr.xirr(values, dates, 0.1));
+
+    }
+}
